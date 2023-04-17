@@ -38,9 +38,62 @@ export class RPCService {
       this.config.attachResponseHandler(this.handleResponse.bind(this));
     }
   }
+  /**
+   * Associate an existing service/object to a host name.
+   * We'll use that hostName to create the proxy
+   * @param {string} hostName
+   * @param {any} host
+   */
+  registerHost<T>(hostName: string, host: T) {
+    this.hosts.set(hostName, host);
+  }
+  /**
+   * Create a proxy over a given host
+   * @param {sring} hostName The host name of the host to proxy
+   */
+  createProxy(hostName: string) {
+    const proxyedObject = {
+      hostName: hostName,
+    };
+
+    return new Proxy(proxyedObject, this.createHandler());
+  }
+  /**
+   * Create the es6 proxy handler object
+   */
+  createHandler() {
+    return {
+      get: (obj: any, methodName: string) => {
+        if (methodName === "then" || methodName === "catch") return undefined;
+
+        if (obj[methodName]) return obj[methodName];
+
+        return (...args: any[]) => {
+          return this.sendRequest({ methodName, args, hostName: obj.hostName });
+        }
+      }
+    }
+  }
+  sendRequest<T>(request: { hostName: string; methodName: string; args: T[] }) {
+    return new Promise((resolve, reject) => {
+      const message: MessageRequest<T> = {
+        id: this.nextMessageId++,
+        type: "request",
+        request
+      }
+      this.pendingRequests.set(message.id, { 
+        resolve,
+        reject,
+        methodName: request.methodName,
+        args: request.args,
+        id: message.id
+      });
+      if (this.config.sendRequest) this.config.sendRequest(message)
+    })
+  }
 
   async handleRequest<T>(message: MessageRequest<T>) {
-    if (message.type !== "request") return
+    if (message.type !== "request") return;
     console.log("Handling request", message);
 
     try {
@@ -50,27 +103,26 @@ export class RPCService {
         id: message.id,
         type: "response",
         response: {
-          returnValue
-        }
-      }
+          returnValue,
+        },
+      };
       console.log("Sending response", response);
       if (this.config.sendResponse) this.config.sendResponse(response);
-    } catch(err) {
+    } catch (err) {
       const response: MessageResponse<null> = {
         id: message.id,
         type: "response",
         response: {
           returnValue: null,
-          err
-        }
-      }
-      console.log("Sending response", response);
+          err,
+        },
+      };
       if (this.config.sendResponse) this.config.sendResponse(response);
     }
   }
 
-  handleResponse<T>(message: MessageResponse<T>) {
-    if (message.type !== "response") return
+  async handleResponse<T>(message: MessageResponse<T>) {
+    if (message.type !== "response") return;
     console.log("Handling response", message);
     const pendingRequest = this.pendingRequests.get(message.id);
     if (!pendingRequest) {
@@ -86,14 +138,16 @@ export class RPCService {
     }
   }
 
-  async executeHostMethod<T>(request: MessageRequest<T>['request']) {
+  async executeHostMethod<T>(request: MessageRequest<T>["request"]) {
     const host = this.hosts.get(request.hostName);
     if (!host) {
       throw new Error(`Host ${request.hostName} not found`);
     }
     const method = host[request.methodName];
     if (!method) {
-      throw new Error(`Method ${request.methodName} not found on host ${request.hostName}`);
+      throw new Error(
+        `Method ${request.methodName} not found on host ${request.hostName}`
+      );
     }
     return method.apply(host, request.args);
   }
