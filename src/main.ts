@@ -25,7 +25,7 @@ if (paramChannel === "1") {
       };
     },
   });
-  const proxy = rpcClient.createProxy("DataService");
+  const proxy = rpcClient.createProxy("DataService", dataService);
 
   document.getElementById("btnRunTest")?.addEventListener("click", async () => {
     const result = await proxy.processData([1, 4, 9]);

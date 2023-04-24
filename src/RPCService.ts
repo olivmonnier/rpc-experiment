@@ -56,29 +56,29 @@ export class RPCClient extends RPCCore {
    * Create a proxy over a given host
    * @param {sring} hostName The host name of the host to proxy
    */
-  createProxy(hostName: string) {
+  createProxy<TObj extends object>(hostName: string, service: TObj) {
     const proxyedObject = {
       hostName: hostName,
+      ...service,
     };
 
-    return new Proxy(proxyedObject, this.createHandler());
-  }
-  /**
-   * Create the es6 proxy handler object
-   */
-  createHandler() {
-    return {
-      get: (obj: any, methodName: string) => {
+    return new Proxy(proxyedObject, {
+      get: (obj: TObj, methodName: string) => {
         if (methodName === "then" || methodName === "catch") return undefined;
 
-        if (obj[methodName]) return obj[methodName];
+        if (obj[methodName as keyof TObj]) return obj[methodName as keyof TObj];
 
-        return (...args: any[]) => {
-          return this.sendRequest({ methodName, args, hostName: obj.hostName });
+        return <TData>(...args: TData[]) => {
+          return this.sendRequest({
+            methodName,
+            args,
+            hostName: proxyedObject.hostName,
+          });
         };
       },
-    };
+    });
   }
+
   sendRequest<T>(request: { hostName: string; methodName: string; args: T[] }) {
     return new Promise((resolve, reject) => {
       const message: MessageRequest<T> = {
