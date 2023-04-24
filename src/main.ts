@@ -1,11 +1,11 @@
-import { RPCService } from "./RPCService.js";
+import { RPCClient, RPCServer } from "./RPCService.js";
 
 const params = new URLSearchParams(window.location.search);
 const paramChannel = params.get("channel");
 const channel = new BroadcastChannel("ChannelDataService");
 
 const dataService = {
-  processData(data) {
+  processData<T>(data: T) {
     if (!Array.isArray(data)) return data;
 
     return data.reduce((prev, curr) => prev + curr, 0);
@@ -15,7 +15,7 @@ const dataService = {
 if (paramChannel === "1") {
   console.log("Channel 1")
   // First Window
-  const rpcService = new RPCService({
+  const rpcClient = new RPCClient({
     sendRequest(message) {
       channel.postMessage(message);
     },
@@ -25,9 +25,9 @@ if (paramChannel === "1") {
       };
     },
   });
-  const proxy = rpcService.createProxy("DataService");
+  const proxy = rpcClient.createProxy("DataService");
 
-  document.getElementById("btnRunTest").addEventListener("click", async () => {
+  document.getElementById("btnRunTest")?.addEventListener("click", async () => {
     const result = await proxy.processData([1, 4, 9]);
     console.log("Result", result);
   });
@@ -36,7 +36,7 @@ if (paramChannel === "1") {
 if (paramChannel === "2") {
   console.log("Channel 2")
   // Second Window
-  const rpcService2 = new RPCService({
+  const rpcServer = new RPCServer({
     attachRequestHandler(handler) {
       channel.onmessage = (m) => handler(m.data);
     },
@@ -44,6 +44,6 @@ if (paramChannel === "2") {
       channel.postMessage(message);
     },
   });
-  rpcService2.registerHost("DataService", dataService);
+  rpcServer.registerHost("DataService", dataService);
 }
 
