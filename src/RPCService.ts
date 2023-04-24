@@ -63,16 +63,14 @@ export class RPCClient extends RPCCore {
     };
 
     return new Proxy(proxyedObject, {
-      get: (obj: TObj, methodName: string) => {
+      get: (obj: typeof proxyedObject, methodName: string) => {
         if (methodName === "then" || methodName === "catch") return undefined;
-
-        if (obj[methodName as keyof TObj]) return obj[methodName as keyof TObj];
 
         return <TData>(...args: TData[]) => {
           return this.sendRequest({
             methodName,
             args,
-            hostName: proxyedObject.hostName,
+            hostName: obj.hostName,
           });
         };
       },
